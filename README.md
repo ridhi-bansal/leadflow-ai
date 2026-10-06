@@ -25,9 +25,10 @@ LeadFlow AI orchestrates the entire inbound sales pipeline with complete human o
 8. **Email Client Handoff:** Click **"Open Email Composer"** to open the user's default email client (`mailto:`) with recipient, subject, and approved body pre-filled. A **"Copy Email"** fallback is provided for maximum compatibility.
 9. **Manual Response Tracking:** Agency staff explicitly marks whether a prospect is `Waiting for Response`, has `Replied`, or resulted in `No Response`.
 10. **Deterministic Follow-Up Intelligence:** Deterministically calculates business-day follow-up schedules (skipping weekends) and generates contextual follow-up drafts for human approval.
+11. **Polished Multi-Sheet Excel CRM Export:** Download structured CRM pipeline snapshots in professional `.xlsx` format (either All Leads or filtered Current View), with formatted headers, AutoFilters, follow-up history, and operational KPI summaries.
 
 > [!NOTE]
-> **Portfolio Transparency:** LeadFlow uses AI for natural language analysis and draft composition. All business-state transitions (scoring, priority tiering, follow-up timing, and response tracking) are handled deterministically or by direct human action. Automated inbox monitoring and automated background email sending are intentionally excluded.
+> **Portfolio Transparency:** LeadFlow uses AI for natural language analysis and draft composition. All business-state transitions (scoring, priority tiering, follow-up timing, response tracking, and CRM exports) are handled deterministically or by direct human action. Automated inbox monitoring and automated background email sending are intentionally excluded.
 
 ---
 
@@ -89,7 +90,20 @@ Human Conversation Review                   AI Draft → Human Approval → Comp
 - **Database:** [Supabase](https://supabase.com/) (PostgreSQL with Row Level Security)
 - **AI Engine:** Google Gemini (`@google/genai` SDK with Structured Outputs & Model Fallbacks)
 - **Email Handoff:** Human-approved `mailto:` email composer handoff + clipboard fallback
+- **CRM Export:** Multi-sheet `.xlsx` spreadsheet generation (`xlsx`) with custom column widths & AutoFilter
 - **Validation:** Zod 3
+
+---
+
+## 📊 Multi-Sheet Excel CRM Export
+
+LeadFlow provides instant, zero-dependency spreadsheet exports of your CRM pipeline:
+- **`CRM Leads` Sheet:** Complete lead profiles including priority tiers, AI qualification, score, budget, response state, next follow-up dates, and source. Features frozen top rows and AutoFilters.
+- **`Follow-Ups` Sheet:** Dedicated log of all scheduled and completed follow-up interactions.
+- **`Summary` Sheet:** Real-time agency KPI dashboard showing pipeline volume, priority tier distribution, response breakdowns, and total pipeline value.
+- **Dual Export Scope:**
+  - **Export All Leads:** Downloads the complete agency CRM database (`LeadFlow_CRM_YYYY-MM-DD.xlsx`).
+  - **Export Current View:** Downloads the exact filtered and searched subset currently displayed in the Lead Inbox (`LeadFlow_CRM_View_YYYY-MM-DD.xlsx`).
 
 ---
 
@@ -145,6 +159,7 @@ Tracks scheduled and completed follow-up events.
 | `GET` | `/api/drafts` | Lists all communication drafts joined with lead metadata for Drafts view. |
 | `PATCH` | `/api/communications/[id]` | Saves manual human edits to a draft's subject and body. |
 | `POST` | `/api/communications/[id]/approve` | Approves email draft (`status: APPROVED`, records `approved_at`). |
+| `GET` | `/api/export/crm` | Generates and downloads multi-sheet `.xlsx` CRM spreadsheet (`scope=all` or `scope=view`). |
 
 ---
 

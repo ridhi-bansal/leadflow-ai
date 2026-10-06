@@ -17,6 +17,8 @@ import {
   CheckCircle2,
   Clock,
   MessageSquare,
+  Download,
+  ChevronDown,
 } from 'lucide-react';
 
 interface LeadDashboardProps {
@@ -39,6 +41,50 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState<boolean>(false);
+
+  // Export State
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState<boolean>(false);
+  const [exportFeedback, setExportFeedback] = useState<string | null>(null);
+
+  const handleExport = async (scope: 'all' | 'view') => {
+    setIsExporting(true);
+    setIsExportMenuOpen(false);
+    setExportFeedback('Exporting CRM workbook...');
+
+    try {
+      const params = new URLSearchParams();
+      params.set('scope', scope);
+
+      if (scope === 'view') {
+        if (searchQuery.trim()) params.set('q', searchQuery.trim());
+        if (qualificationFilter !== 'ALL') params.set('qualification', qualificationFilter);
+        if (statusFilter !== 'ALL') params.set('status', statusFilter);
+        if (responseFilter !== 'ALL') params.set('response', responseFilter);
+        if (sourceFilter !== 'ALL') params.set('source', sourceFilter);
+        if (serviceFilter !== 'ALL') params.set('service', serviceFilter);
+        params.set('sort', sortOption);
+      }
+
+      // Download file directly
+      const downloadUrl = `/api/export/crm?${params.toString()}`;
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', '');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setExportFeedback('Export complete! Download started.');
+      setTimeout(() => setExportFeedback(null), 3500);
+    } catch (err) {
+      console.error('Export failed:', err);
+      setExportFeedback('Could not export CRM data. Please try again.');
+      setTimeout(() => setExportFeedback(null), 4000);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
@@ -342,6 +388,46 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
               </select>
             </div>
 
+            {/* Export CRM Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                disabled={isExporting}
+                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50 cursor-pointer"
+                title="Export CRM data to Excel (.xlsx)"
+              >
+                <Download className={`w-3.5 h-3.5 ${isExporting ? 'animate-bounce' : ''}`} />
+                <span>{isExporting ? 'Exporting...' : 'Export CRM'}</span>
+                <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+              </button>
+
+              {isExportMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 text-xs animate-in fade-in duration-150">
+                  <button
+                    type="button"
+                    onClick={() => handleExport('all')}
+                    className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center justify-between text-slate-800 font-medium transition cursor-pointer"
+                  >
+                    <span>📊 Export All Leads (.xlsx)</span>
+                    <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">
+                      {leads.length}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExport('view')}
+                    className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center justify-between text-slate-800 font-medium transition cursor-pointer border-t border-slate-100"
+                  >
+                    <span>🔍 Export Current View (.xlsx)</span>
+                    <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-1.5 py-0.5 rounded">
+                      {displayedLeads.length}
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={fetchLeads}
               className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 transition cursor-pointer"
@@ -352,6 +438,14 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
             </button>
           </div>
         </div>
+
+        {/* Export Feedback Banner */}
+        {exportFeedback && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{exportFeedback}</span>
+          </div>
+        )}
 
         {/* Filter Pills */}
         <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
