@@ -501,6 +501,115 @@ function cleanPlainTextEmail(text: string): string {
 }
 
 /**
+ * Structured schema definition for Gemini follow-up email reply draft
+ */
+const FOLLOWUP_DRAFT_SYSTEM_INSTRUCTION = `You are a senior client strategist and sales director at Northstar Studio, a premier American digital agency.
+
+Your job is to craft a concise, natural, warm, and highly professional follow-up email to a prospective client who has not yet responded to our previous message.
+
+STRICT FORMATTING & WRITING RULES:
+1. STRICT PLAIN TEXT ONLY:
+   - Do NOT use markdown links like [Schedule a call](url).
+   - Do NOT use mailto: links.
+   - Do NOT use HTML tags.
+   - Format paragraphs cleanly with double-newlines (\\n\\n).
+   - Format closing and signature cleanly on separate lines.
+
+2. CONCISE & RESPECTFUL:
+   - Follow-up #1 should be much shorter than initial outreach (2 short paragraphs).
+   - Follow-up #2 should be very brief and graceful (1-2 short paragraphs).
+   - Reference their specific brand/company and project scope naturally.
+
+3. PROHIBITED PHRASING & TOPICS:
+   - NEVER mention AI, algorithms, automated follow-up sequences, or "LeadFlow AI".
+   - NEVER sound aggressive, demanding, or guilty.
+   - NEVER invent facts or budgets not in the original lead context.
+
+4. CALL TO ACTION: A low-friction question (e.g., "Are you still aiming for a November launch?", "Would 15 minutes this week or next work to discuss your project?").`;
+
+/**
+ * Generates a concise follow-up email draft using Gemini.
+ */
+export async function generateFollowUpDraftWithGemini(
+  lead: Lead,
+  followUpNumber: number = 1,
+  previousCommunications: { type: string; subject: string; body: string }[] = [],
+  analysis?: AILeadAnalysis | null
+): Promise<AIEmailDraft> {
+  const ai = getGeminiClient();
+
+  const prevContext = previousCommunications
+    .map((c, i) => `--- PREVIOUS MESSAGE ${i + 1} (${c.type}) ---\nSubject: ${c.subject}\n\n${c.body}`)
+    .join('\n\n');
+
+  const userPrompt = `Craft Follow-up #${followUpNumber} email for this prospective client:
+
+PROSPECT INFORMATION:
+- Name: ${lead.name}
+- Email: ${lead.email}
+- Company: ${lead.company || 'Not specified'}
+- Requested Service: ${lead.service || analysis?.service || 'Digital Agency Services'}
+- Target Timeline: ${lead.timeline || analysis?.timeline || 'Upcoming'}
+- Original Inquiry:
+"""
+${lead.message}
+"""
+
+${prevContext ? `PREVIOUS OUTREACH HISTORY:\n${prevContext}\n` : ''}
+
+GOAL:
+Write a natural, concise, and compelling Follow-up #${followUpNumber} email.
+${
+  followUpNumber === 1
+    ? 'Follow-up #1 should briefly check in, touch on their timeline, and ask if they are ready to connect.'
+    : 'Follow-up #2 is a final courteous check-in acknowledging their busy schedule and keeping the door open.'
+}
+
+Generate structured JSON with subject and body.`;
+
+  try {
+    const response = await callGeminiWithModelFallback(async (modelName) => {
+      return await ai.models.generateContent({
+        model: modelName,
+        contents: userPrompt,
+        config: {
+          systemInstruction: FOLLOWUP_DRAFT_SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          responseSchema: emailDraftResponseSchema,
+          temperature: 0.3,
+        },
+      });
+    });
+
+    const responseText = response.text;
+    if (!responseText) {
+      const candidate = response.candidates?.[0];
+      throw new Error(
+        `Gemini returned an empty follow-up draft response. Finish reason: ${candidate?.finishReason || 'UNKNOWN'}`
+      );
+    }
+
+    const rawParsed = JSON.parse(responseText);
+    const validated = aiEmailDraftSchema.safeParse(rawParsed);
+
+    if (!validated.success) {
+      console.error('Gemini follow-up draft validation errors:', validated.error.format());
+      throw new Error('Gemini follow-up draft did not match the expected structure.');
+    }
+
+    const cleanBody = cleanPlainTextEmail(validated.data.body);
+
+    return {
+      subject: validated.data.subject.trim(),
+      body: cleanBody,
+    };
+  } catch (error) {
+    console.error(`Error during Gemini Follow-up #${followUpNumber} draft generation:`, error);
+    throw error;
+  }
+}
+
+/**
  * Extracts structured lead data from a pasted/raw prospect email using Gemini.
  */
 export async function extractLeadFromPastedEmail(
@@ -556,4 +665,5 @@ Extract the fields according to the schema rules and return structured JSON.`;
     throw error;
   }
 }
+
 

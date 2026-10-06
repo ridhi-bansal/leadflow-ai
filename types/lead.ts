@@ -3,7 +3,13 @@ export type LeadStatus =
   | 'AI_ANALYZED'
   | 'AI_ANALYSIS_FAILED'
   | 'PENDING_APPROVAL'
-  | 'APPROVED';
+  | 'APPROVED'
+  | 'CONTACTED'
+  | 'CLOSED';
+
+export type ResponseStatus = 'waiting' | 'replied' | 'no_response';
+
+export type FollowUpStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'SKIPPED';
 
 export type Currency = 'USD' | 'EUR' | 'GBP' | 'CAD' | 'AUD';
 
@@ -74,8 +80,14 @@ export interface Lead {
   missing_information: string[] | null;
   recommended_action: string | null;
   status: LeadStatus;
+  response_status?: ResponseStatus;
+  last_contacted_at?: string | null;
+  next_follow_up_at?: string | null;
+  follow_up_count?: number;
   created_at: string;
   updated_at: string;
+  communications?: Communication[];
+  follow_ups?: FollowUp[];
 }
 
 export interface AILeadAnalysis {
@@ -122,7 +134,37 @@ export interface Communication {
   gmail_message_id?: string | null;
 }
 
+export interface FollowUp {
+  id: string;
+  lead_id: string;
+  follow_up_number: number;
+  scheduled_for: string;
+  status: FollowUpStatus;
+  reason?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface FollowUpRecommendation {
+  shouldFollowUp: boolean;
+  followUpNumber: number | null;
+  recommendedDate: string | null;
+  recommendedDateFormatted: string | null;
+  reason: string;
+  nextAction: string;
+  isDue: boolean;
+  status: 'DUE' | 'UPCOMING' | 'PAUSED_REPLIED' | 'STOPPED_MAX' | 'PENDING_INITIAL';
+}
+
 export interface AIEmailDraft {
   subject: string;
   body: string;
+}
+
+export interface LeadActivityEvent {
+  id: string;
+  timestamp: string;
+  title: string;
+  description: string;
+  type: 'intake' | 'analysis' | 'email_approved' | 'composer_opened' | 'response_recorded' | 'followup_recommended' | 'followup_approved';
 }

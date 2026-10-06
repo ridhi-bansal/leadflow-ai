@@ -150,21 +150,27 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 mt-auto">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-700">LeadFlow AI</span>
-            <span>—</span>
-            <span>Portfolio Project for Northstar Studio</span>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 space-y-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-700">LeadFlow AI</span>
+              <span>—</span>
+              <span>Portfolio Project for Northstar Studio</span>
+            </div>
+            <div className="flex items-center gap-4 text-slate-400">
+              <span>Next.js 15 App Router</span>
+              <span>•</span>
+              <span>Supabase PostgreSQL</span>
+              <span>•</span>
+              <span>Google Gen AI SDK</span>
+            </div>
           </div>
-          <div className="flex items-center gap-4 text-slate-400">
-            <span>Next.js 15 App Router</span>
-            <span>•</span>
-            <span>Supabase PostgreSQL</span>
-            <span>•</span>
-            <span>Google Gen AI SDK</span>
-          </div>
+          <p className="text-[11px] text-slate-400 text-center sm:text-left leading-relaxed">
+            LeadFlow uses AI for lead analysis and message drafting. Business-state decisions such as scoring, priority, follow-up timing, and response status are handled deterministically or by human input.
+          </p>
         </div>
       </footer>
     </div>
   );
 }
+

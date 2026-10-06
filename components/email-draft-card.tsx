@@ -24,11 +24,24 @@ import {
 interface EmailDraftCardProps {
   leadId: string;
   lead?: Lead | null;
+  communicationType?: 'initial_reply' | 'follow_up_1' | 'follow_up_2';
+  followUpNumber?: number;
+  initialCommunication?: Communication | null;
+  onDraftUpdated?: () => void;
 }
 
-export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
-  const [communication, setCommunication] = useState<Communication | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+export function EmailDraftCard({
+  leadId,
+  lead,
+  communicationType = 'initial_reply',
+  followUpNumber = 1,
+  initialCommunication,
+  onDraftUpdated,
+}: EmailDraftCardProps) {
+  const [communication, setCommunication] = useState<Communication | null>(
+    initialCommunication || null
+  );
+  const [isLoading, setIsLoading] = useState<boolean>(!initialCommunication);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isApproving, setIsApproving] = useState<boolean>(false);
@@ -41,46 +54,87 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
   const [copied, setCopied] = useState<boolean>(false);
 
   // Editable fields
-  const [subject, setSubject] = useState<string>('');
-  const [body, setBody] = useState<string>('');
+  const [subject, setSubject] = useState<string>(initialCommunication?.subject || '');
+  const [body, setBody] = useState<string>(initialCommunication?.body || '');
 
-  // 1. Fetch or generate initial draft on mount
+  // 1. Fetch or generate draft on mount
   useEffect(() => {
     let isMounted = true;
 
     async function loadOrCreateDraft() {
+      if (initialCommunication) {
+        setCommunication(initialCommunication);
+        setSubject(initialCommunication.subject);
+        setBody(initialCommunication.body);
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
       try {
-        // First check if draft already exists
-        const res = await fetch(`/api/leads/${leadId}/draft`);
-        const data = await res.json();
+        if (communicationType === 'initial_reply') {
+          // Fetch existing initial reply
+          const res = await fetch(`/api/leads/${leadId}/draft`);
+          const data = await res.json();
 
-        if (data.communication && isMounted) {
-          setCommunication(data.communication);
-          setSubject(data.communication.subject);
-          setBody(data.communication.body);
-          setIsLoading(false);
-          return;
-        }
+          if (data.communication && isMounted) {
+            setCommunication(data.communication);
+            setSubject(data.communication.subject);
+            setBody(data.communication.body);
+            setIsLoading(false);
+            return;
+          }
 
-        // If no draft exists, generate one automatically
-        const generateRes = await fetch(`/api/leads/${leadId}/draft`, {
-          method: 'POST',
-        });
-        const generateData = await generateRes.json();
+          // If none exists, generate initial draft
+          const genRes = await fetch(`/api/leads/${leadId}/draft`, { method: 'POST' });
+          const genData = await genRes.json();
 
-        if (generateData.communication && isMounted) {
-          setCommunication(generateData.communication);
-          setSubject(generateData.communication.subject);
-          setBody(generateData.communication.body);
-        } else if (generateData.error && isMounted) {
-          setError(generateData.error);
+          if (genData.communication && isMounted) {
+            setCommunication(genData.communication);
+            setSubject(genData.communication.subject);
+            setBody(genData.communication.body);
+          } else if (genData.error && isMounted) {
+            setError(genData.error);
+          }
+        } else {
+          // Fetch existing follow-up draft
+          const res = await fetch(
+            `/api/leads/${leadId}/followup-draft?number=${followUpNumber}`
+          );
+          const data = await res.json();
+          const existing = data.communications?.find(
+            (c: Communication) => c.type === communicationType
+          );
+
+          if (existing && isMounted) {
+            setCommunication(existing);
+            setSubject(existing.subject);
+            setBody(existing.body);
+            setIsLoading(false);
+            return;
+          }
+
+          // If none exists, generate follow-up draft
+          const genRes = await fetch(`/api/leads/${leadId}/followup-draft`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ follow_up_number: followUpNumber }),
+          });
+          const genData = await genRes.json();
+
+          if (genData.communication && isMounted) {
+            setCommunication(genData.communication);
+            setSubject(genData.communication.subject);
+            setBody(genData.communication.body);
+          } else if (genData.error && isMounted) {
+            setError(genData.error);
+          }
         }
       } catch (err) {
         if (isMounted) {
           console.error('Failed to load/generate draft:', err);
-          setError('Failed to initialize AI email draft. You can try generating below.');
+          setError('Failed to initialize AI draft. You can retry generating below.');
         }
       } finally {
         if (isMounted) setIsLoading(false);
@@ -92,7 +146,7 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
     return () => {
       isMounted = false;
     };
-  }, [leadId]);
+  }, [leadId, communicationType, followUpNumber, initialCommunication]);
 
   // Regenerate draft
   const handleRegenerate = async (force: boolean = false) => {
@@ -101,11 +155,21 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
     setSuccessMessage(null);
 
     try {
-      const res = await fetch(`/api/leads/${leadId}/draft`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force }),
-      });
+      let res;
+      if (communicationType === 'initial_reply') {
+        res = await fetch(`/api/leads/${leadId}/draft`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force }),
+        });
+      } else {
+        res = await fetch(`/api/leads/${leadId}/followup-draft`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ follow_up_number: followUpNumber, force }),
+        });
+      }
+
       const data = await res.json();
 
       if (!res.ok || !data.communication) {
@@ -118,6 +182,7 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
       setIsEditing(false);
       setComposerOpened(false);
       setSuccessMessage('AI generated a fresh personalized draft.');
+      onDraftUpdated?.();
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err) {
       console.error('Regeneration error:', err);
@@ -154,6 +219,7 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
       setCommunication(data.communication);
       setIsEditing(false);
       setSuccessMessage('Draft edits saved successfully.');
+      onDraftUpdated?.();
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error('Save error:', err);
@@ -185,7 +251,10 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
 
       setCommunication(data.communication);
       setIsEditing(false);
-      setSuccessMessage('Email draft approved! You can now open your email composer to review and send.');
+      setSuccessMessage(
+        'Email draft approved! You can now open your email composer to review and send.'
+      );
+      onDraftUpdated?.();
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
       console.error('Approval error:', err);
@@ -207,7 +276,9 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
     });
 
     if (mailto.isTooLong) {
-      setError('This email body is too long for some email clients to open automatically via mailto. Please use "Copy Email" instead.');
+      setError(
+        'This email body is too long for some email clients to open automatically via mailto. Please use "Copy Email" instead.'
+      );
       return;
     }
 
@@ -240,6 +311,13 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
 
   const isApproved = communication?.status === 'APPROVED';
   const isSent = communication?.status === 'SENT';
+
+  const titleText =
+    communicationType === 'follow_up_1'
+      ? 'Follow-Up #1 Draft'
+      : communicationType === 'follow_up_2'
+      ? 'Follow-Up #2 Draft (Final Check-In)'
+      : 'Initial Agency Reply Draft';
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden transition-all">
@@ -282,15 +360,11 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
               )}
             </span>
             <span className="text-xs text-slate-500 hidden sm:inline">
-              Personalized Agency Reply
+              {communicationType === 'initial_reply' ? 'Initial Outreach' : `Follow-up #${followUpNumber}`}
             </span>
           </div>
           <h3 className="text-lg font-bold text-slate-900">
-            {isSent
-              ? 'Sent Email Record'
-              : isApproved
-              ? 'Approved Email Response'
-              : 'Proposed Email Response Draft'}
+            {isSent ? `Sent: ${titleText}` : isApproved ? `Approved: ${titleText}` : titleText}
           </h3>
         </div>
 
@@ -443,10 +517,10 @@ export function EmailDraftCard({ leadId, lead }: EmailDraftCardProps) {
         <div className="p-8 text-center space-y-3">
           <div className="w-8 h-8 mx-auto border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm font-medium text-slate-600">
-            Generating personalized reply draft with Gemini...
+            Generating personalized {titleText} with Gemini...
           </p>
           <p className="text-xs text-slate-400">
-            Referencing {lead?.name || 'prospect'} &apos;s scope and timeline
+            Referencing {lead?.name || 'prospect'}&apos;s inquiry and communication history
           </p>
         </div>
       ) : (

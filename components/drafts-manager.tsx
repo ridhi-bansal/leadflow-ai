@@ -10,6 +10,7 @@ import {
   Sparkles,
   AlertCircle,
   ChevronRight,
+  RotateCcw,
 } from 'lucide-react';
 import { LeadDetailModal } from './lead-detail-modal';
 
@@ -21,6 +22,7 @@ export function DraftsManager() {
   const [drafts, setDrafts] = useState<DraftWithLead[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState<boolean>(false);
@@ -87,6 +89,38 @@ export function DraftsManager() {
     }
   };
 
+  const getTypeBadge = (type: string) => {
+    switch (type) {
+      case 'follow_up_1':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+            <RotateCcw className="w-3 h-3 text-indigo-600" />
+            Follow-Up #1
+          </span>
+        );
+      case 'follow_up_2':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
+            <RotateCcw className="w-3 h-3 text-purple-600" />
+            Follow-Up #2 (Final)
+          </span>
+        );
+      case 'initial_reply':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+            <Mail className="w-3 h-3 text-slate-500" />
+            Initial Reply
+          </span>
+        );
+    }
+  };
+
+  const displayedDrafts = drafts.filter((d) => {
+    if (typeFilter !== 'ALL' && d.type !== typeFilter) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       {/* Top Header & Metrics */}
@@ -95,35 +129,51 @@ export function DraftsManager() {
           <div className="flex items-center gap-2 mb-1">
             <h2 className="text-xl font-bold text-slate-900">Email Draft Management</h2>
             <span className="text-xs bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-full border border-blue-200">
-              {drafts.length} Total
+              {displayedDrafts.length} Messages
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            Review, edit, approve, and hand off AI-generated email responses to your email client with full human oversight.
+            Review, edit, approve, and compose initial outreach and follow-up emails with full human oversight.
           </p>
         </div>
 
-        {/* Status Filters */}
+        {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
-          {['ALL', 'DRAFT', 'APPROVED', 'SENT'].map((st) => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                statusFilter === st
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {st === 'ALL'
-                ? 'All Drafts'
-                : st === 'DRAFT'
-                ? 'Pending Review'
-                : st === 'APPROVED'
-                ? 'Approved'
-                : 'Sent'}
-            </button>
-          ))}
+          {/* Status Filters */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+            {['ALL', 'DRAFT', 'APPROVED', 'SENT'].map((st) => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  statusFilter === st
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {st === 'ALL'
+                  ? 'All Statuses'
+                  : st === 'DRAFT'
+                  ? 'Pending Review'
+                  : st === 'APPROVED'
+                  ? 'Approved'
+                  : 'Sent'}
+              </button>
+            ))}
+          </div>
+
+          {/* Type Filter */}
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            aria-label="Filter drafts by communication type"
+            className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All Types</option>
+            <option value="initial_reply">Initial Reply</option>
+            <option value="follow_up_1">Follow-Up #1</option>
+            <option value="follow_up_2">Follow-Up #2</option>
+          </select>
         </div>
       </div>
 
@@ -145,19 +195,19 @@ export function DraftsManager() {
           <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-xs text-slate-500 font-medium">Loading email drafts...</p>
         </div>
-      ) : drafts.length === 0 ? (
+      ) : displayedDrafts.length === 0 ? (
         <div className="py-16 text-center space-y-3 bg-white rounded-2xl border border-slate-200 p-6">
           <Mail className="w-10 h-10 text-slate-300 mx-auto" />
           <h3 className="text-sm font-bold text-slate-800">No email drafts found</h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            {searchQuery || statusFilter !== 'ALL'
+            {searchQuery || statusFilter !== 'ALL' || typeFilter !== 'ALL'
               ? 'Try changing your search keywords or filter settings.'
-              : 'Submit or paste new leads to generate AI email reply drafts for human review.'}
+              : 'Submit new leads or generate follow-ups to create AI drafts for human review.'}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {drafts.map((draft) => {
+          {displayedDrafts.map((draft) => {
             const leadObj = Array.isArray(draft.leads) ? draft.leads[0] : draft.leads;
             return (
               <div
@@ -180,6 +230,7 @@ export function DraftsManager() {
                             • {leadObj.company}
                           </span>
                         )}
+                        {getTypeBadge(draft.type)}
                       </div>
                       <span className="text-[11px] text-slate-400">
                         {leadObj?.email || 'No email provided'}
@@ -223,9 +274,9 @@ export function DraftsManager() {
 
                   <button
                     onClick={() => handleOpenLead(draft.lead_id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition cursor-pointer"
                   >
-                    <span>Review & Edit Draft</span>
+                    <span>Review &amp; Edit Draft</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>

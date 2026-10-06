@@ -14,6 +14,9 @@ import {
   Plus,
   RefreshCw,
   Mail,
+  CheckCircle2,
+  Clock,
+  MessageSquare,
 } from 'lucide-react';
 
 interface LeadDashboardProps {
@@ -26,10 +29,13 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [qualificationFilter, setQualificationFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [responseFilter, setResponseFilter] = useState<string>('ALL');
   const [sourceFilter, setSourceFilter] = useState<string>('ALL');
   const [serviceFilter, setServiceFilter] = useState<string>('ALL');
   const [sortOption, setSortOption] = useState<string>('newest');
-  const [selectedPriority, setSelectedPriority] = useState<'ALL' | 'RESPOND_NOW' | 'REVIEW' | 'LOW'>('ALL');
+  const [selectedPriority, setSelectedPriority] = useState<
+    'ALL' | 'RESPOND_NOW' | 'REPLIED' | 'REVIEW' | 'LOW'
+  >('ALL');
 
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState<boolean>(false);
@@ -61,39 +67,57 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
     fetchLeads();
   }, [fetchLeads]);
 
-  // Priority categorization
+  // Operational Priority Categorization
   const priorityGroups = useMemo(() => {
-    const respondNow = leads.filter(
-      (l) =>
-        l.qualification === 'HIGH' &&
-        l.status !== 'APPROVED' &&
-        (l.urgency === 'High' || (l.ai_score ?? 0) >= 80)
-    );
+    // 1. Leads that have replied -> Needs conversation review
+    const replied = leads.filter((l) => l.response_status === 'replied');
 
-    const review = leads.filter(
-      (l) =>
-        (l.qualification === 'HIGH' && !respondNow.includes(l)) ||
+    // 2. High priority needing action today:
+    // - High qualification and not yet approved
+    // - OR has follow-up recommended and not replied
+    // - Excludes replied leads and leads with 2 follow-ups completed
+    const respondNow = leads.filter((l) => {
+      if (l.response_status === 'replied') return false;
+      const isHigh = l.qualification === 'HIGH' || (l.ai_score ?? 0) >= 80;
+      const hasFollowUpDue = l.response_status === 'no_response';
+      const isUnapproved = l.status !== 'APPROVED';
+      return isHigh && (isUnapproved || hasFollowUpDue);
+    });
+
+    // 3. Moderate potential / Review & Scope
+    const review = leads.filter((l) => {
+      if (l.response_status === 'replied') return false;
+      if (respondNow.includes(l)) return false;
+      return (
         l.qualification === 'MEDIUM' ||
         (l.missing_information && l.missing_information.length > 0) ||
         l.status === 'PENDING_APPROVAL'
-    );
+      );
+    });
 
+    // 4. Low priority or Dormant
     const low = leads.filter(
-      (l) =>
-        l.qualification === 'LOW' ||
-        ((l.ai_score ?? 0) < 50 && !respondNow.includes(l) && !review.includes(l))
+      (l) => !replied.includes(l) && !respondNow.includes(l) && !review.includes(l)
     );
 
-    return { respondNow, review, low };
+    return { respondNow, replied, review, low };
   }, [leads]);
 
-  // Apply Priority filter on top of fetched leads if selected
+  // Filter based on selected priority card
   const displayedLeads = useMemo(() => {
-    if (selectedPriority === 'RESPOND_NOW') return priorityGroups.respondNow;
-    if (selectedPriority === 'REVIEW') return priorityGroups.review;
-    if (selectedPriority === 'LOW') return priorityGroups.low;
-    return leads;
-  }, [leads, selectedPriority, priorityGroups]);
+    let filtered = leads;
+
+    if (selectedPriority === 'RESPOND_NOW') filtered = priorityGroups.respondNow;
+    else if (selectedPriority === 'REPLIED') filtered = priorityGroups.replied;
+    else if (selectedPriority === 'REVIEW') filtered = priorityGroups.review;
+    else if (selectedPriority === 'LOW') filtered = priorityGroups.low;
+
+    if (responseFilter !== 'ALL') {
+      filtered = filtered.filter((l) => (l.response_status || 'waiting') === responseFilter);
+    }
+
+    return filtered;
+  }, [leads, selectedPriority, responseFilter, priorityGroups]);
 
   const handleOpenLead = (leadId: string) => {
     setSelectedLeadId(leadId);
@@ -132,21 +156,47 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
     }
   };
 
+  const getResponseStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'replied':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            Replied
+          </span>
+        );
+      case 'no_response':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+            <Clock className="w-3 h-3 text-amber-600" />
+            No Response
+          </span>
+        );
+      case 'waiting':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200">
+            Waiting
+          </span>
+        );
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* 1. Priority Center ("Today's Priorities") */}
+      {/* 1. Operational Priority Center */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Today&apos;s Priorities</h2>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Today&apos;s Action Matrix</h2>
             <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md">
-              Deterministic Action Matrix
+              Operational Priority Engine
             </span>
           </div>
 
           <button
             onClick={() => setSelectedPriority('ALL')}
-            className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition ${
+            className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition cursor-pointer ${
               selectedPriority === 'ALL'
                 ? 'bg-slate-900 text-white'
                 : 'text-slate-500 hover:text-slate-800'
@@ -156,79 +206,104 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Priority A: Respond Now */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 1. Priority A: Follow Up Today */}
           <button
             onClick={() =>
               setSelectedPriority(selectedPriority === 'RESPOND_NOW' ? 'ALL' : 'RESPOND_NOW')
             }
-            className={`p-5 rounded-2xl border text-left transition relative overflow-hidden group ${
+            className={`p-4 rounded-2xl border text-left transition relative overflow-hidden group cursor-pointer ${
               selectedPriority === 'RESPOND_NOW'
                 ? 'bg-rose-50/80 border-rose-400 shadow-md ring-2 ring-rose-300'
                 : 'bg-white border-slate-200 hover:border-rose-300 hover:shadow-sm'
             }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
-                <Flame className="w-5 h-5 text-rose-600" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                <Flame className="w-4 h-4 text-rose-600" />
               </div>
               <span className="text-2xl font-black text-rose-700">
                 {priorityGroups.respondNow.length}
               </span>
             </div>
-            <h3 className="text-sm font-bold text-slate-900">A — Respond Now</h3>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              High-value &amp; high-intent leads requiring prompt agency follow-up.
+            <h3 className="text-xs font-bold text-slate-900">🔴 Act / Follow Up Today</h3>
+            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2">
+              High-value prospects needing initial reply or scheduled follow-up.
             </p>
           </button>
 
-          {/* Priority B: Review */}
+          {/* 2. Needs Response Review (Replied) */}
+          <button
+            onClick={() =>
+              setSelectedPriority(selectedPriority === 'REPLIED' ? 'ALL' : 'REPLIED')
+            }
+            className={`p-4 rounded-2xl border text-left transition relative overflow-hidden group cursor-pointer ${
+              selectedPriority === 'REPLIED'
+                ? 'bg-emerald-50/80 border-emerald-400 shadow-md ring-2 ring-emerald-300'
+                : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                <MessageSquare className="w-4 h-4 text-emerald-600" />
+              </div>
+              <span className="text-2xl font-black text-emerald-700">
+                {priorityGroups.replied.length}
+              </span>
+            </div>
+            <h3 className="text-xs font-bold text-slate-900">🟢 Needs Response Review</h3>
+            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2">
+              Prospects who replied. Follow-ups paused for human conversation.
+            </p>
+          </button>
+
+          {/* 3. Priority B: Review & Scope */}
           <button
             onClick={() =>
               setSelectedPriority(selectedPriority === 'REVIEW' ? 'ALL' : 'REVIEW')
             }
-            className={`p-5 rounded-2xl border text-left transition relative overflow-hidden group ${
+            className={`p-4 rounded-2xl border text-left transition relative overflow-hidden group cursor-pointer ${
               selectedPriority === 'REVIEW'
                 ? 'bg-amber-50/80 border-amber-400 shadow-md ring-2 ring-amber-300'
                 : 'bg-white border-slate-200 hover:border-amber-300 hover:shadow-sm'
             }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
-                <FileCheck className="w-5 h-5 text-amber-600" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                <FileCheck className="w-4 h-4 text-amber-600" />
               </div>
               <span className="text-2xl font-black text-amber-700">
                 {priorityGroups.review.length}
               </span>
             </div>
-            <h3 className="text-sm font-bold text-slate-900">B — Review &amp; Scope</h3>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Moderate potential or high leads missing technical info or needing review.
+            <h3 className="text-xs font-bold text-slate-900">🟡 Review &amp; Scope</h3>
+            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2">
+              Moderate tier or inquiries missing budget/timeline info.
             </p>
           </button>
 
-          {/* Priority C: Low Priority */}
+          {/* 4. Priority C: Low / Dormant */}
           <button
             onClick={() =>
               setSelectedPriority(selectedPriority === 'LOW' ? 'ALL' : 'LOW')
             }
-            className={`p-5 rounded-2xl border text-left transition relative overflow-hidden group ${
+            className={`p-4 rounded-2xl border text-left transition relative overflow-hidden group cursor-pointer ${
               selectedPriority === 'LOW'
                 ? 'bg-slate-100 border-slate-400 shadow-md ring-2 ring-slate-300'
                 : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
             }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
-                <Coffee className="w-5 h-5 text-slate-500" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
+                <Coffee className="w-4 h-4 text-slate-500" />
               </div>
               <span className="text-2xl font-black text-slate-700">
                 {priorityGroups.low.length}
               </span>
             </div>
-            <h3 className="text-sm font-bold text-slate-900">C — Low / Exploratory</h3>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Vague or low-budget casual inquiries with flexible or indefinite timeline.
+            <h3 className="text-xs font-bold text-slate-900">⚪ Low / Dormant</h3>
+            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed line-clamp-2">
+              Exploratory inquiries or leads past sequence limit.
             </p>
           </button>
         </div>
@@ -269,7 +344,7 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
 
             <button
               onClick={fetchLeads}
-              className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 transition"
+              className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 transition cursor-pointer"
               title="Refresh leads"
               aria-label="Refresh leads"
             >
@@ -290,7 +365,7 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
               <button
                 key={q}
                 onClick={() => setQualificationFilter(q)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
                   qualificationFilter === q
                     ? 'bg-blue-600 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -303,13 +378,44 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
 
           <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
 
+          {/* Status Filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Filter leads by lifecycle status"
+            className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All Stages</option>
+            <option value="NEW">New</option>
+            <option value="AI_ANALYZED">AI Analyzed</option>
+            <option value="PENDING_APPROVAL">Pending Approval</option>
+            <option value="APPROVED">Approved</option>
+          </select>
+
+          <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+
+          {/* Response Status Filter */}
+          <select
+            value={responseFilter}
+            onChange={(e) => setResponseFilter(e.target.value)}
+            aria-label="Filter leads by response status"
+            className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All Responses</option>
+            <option value="waiting">Waiting for Response</option>
+            <option value="replied">✓ Replied</option>
+            <option value="no_response">No Response</option>
+          </select>
+
+          <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+
           {/* Source Filter */}
           <div className="flex items-center gap-1">
             {['ALL', 'form', 'email'].map((src) => (
               <button
                 key={src}
                 onClick={() => setSourceFilter(src)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
                   sourceFilter === src
                     ? 'bg-slate-900 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -319,22 +425,6 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
               </button>
             ))}
           </div>
-
-          <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            aria-label="Filter leads by status"
-            className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-700 focus:outline-none cursor-pointer"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="NEW">New</option>
-            <option value="AI_ANALYZED">Analyzed</option>
-            <option value="PENDING_APPROVAL">Pending Approval</option>
-            <option value="APPROVED">Approved</option>
-          </select>
 
           <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
 
@@ -369,12 +459,12 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
             </div>
             <h3 className="text-sm font-bold text-slate-800">No matching leads found</h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Try adjusting your search criteria or priority filters, or intake a new lead.
+              Try adjusting your search criteria or action filters, or intake a new lead.
             </p>
             {onNavigateToIntake && (
               <button
                 onClick={onNavigateToIntake}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-sm"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-sm cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Intake New Lead
@@ -389,7 +479,7 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
                   <th className="py-3.5 px-4">Prospect</th>
                   <th className="py-3.5 px-4">Service &amp; Budget</th>
                   <th className="py-3.5 px-4">AI Score &amp; Tier</th>
-                  <th className="py-3.5 px-4">Intent / Urgency</th>
+                  <th className="py-3.5 px-4">Response Status</th>
                   <th className="py-3.5 px-4">Source</th>
                   <th className="py-3.5 px-4">Date</th>
                   <th className="py-3.5 px-4 text-right">Action</th>
@@ -430,14 +520,9 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
                       {getQualificationBadge(lead.qualification, lead.ai_score)}
                     </td>
 
-                    {/* Intent / Urgency */}
+                    {/* Response Status */}
                     <td className="py-4 px-4">
-                      <div className="text-slate-700 font-medium">
-                        Intent: <strong>{lead.intent || 'Medium'}</strong>
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        Urgency: {lead.urgency || 'Medium'}
-                      </div>
+                      {getResponseStatusBadge(lead.response_status)}
                     </td>
 
                     {/* Source */}
@@ -459,7 +544,7 @@ export function LeadDashboard({ onNavigateToIntake }: LeadDashboardProps) {
                           e.stopPropagation();
                           handleOpenLead(lead.id);
                         }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 group-hover:bg-blue-600 group-hover:text-white text-slate-700 text-xs font-semibold rounded-lg transition"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 group-hover:bg-blue-600 group-hover:text-white text-slate-700 text-xs font-semibold rounded-lg transition cursor-pointer"
                       >
                         <span>Details</span>
                         <ChevronRight className="w-3.5 h-3.5" />

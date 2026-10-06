@@ -30,6 +30,10 @@ export type Database = {
           missing_information: Json | null;
           recommended_action: string | null;
           status: string;
+          response_status: string;
+          last_contacted_at: string | null;
+          next_follow_up_at: string | null;
+          follow_up_count: number;
           created_at: string;
           updated_at: string;
         };
@@ -53,6 +57,10 @@ export type Database = {
           missing_information?: Json | null;
           recommended_action?: string | null;
           status?: string;
+          response_status?: string;
+          last_contacted_at?: string | null;
+          next_follow_up_at?: string | null;
+          follow_up_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -76,6 +84,10 @@ export type Database = {
           missing_information?: Json | null;
           recommended_action?: string | null;
           status?: string;
+          response_status?: string;
+          last_contacted_at?: string | null;
+          next_follow_up_at?: string | null;
+          follow_up_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -124,6 +136,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "communications_lead_id_fkey";
+            columns: ["lead_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      follow_ups: {
+        Row: {
+          id: string;
+          lead_id: string;
+          follow_up_number: number;
+          scheduled_for: string;
+          status: string;
+          reason: string | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          follow_up_number: number;
+          scheduled_for: string;
+          status?: string;
+          reason?: string | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          lead_id?: string;
+          follow_up_number?: number;
+          scheduled_for?: string;
+          status?: string;
+          reason?: string | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "follow_ups_lead_id_fkey";
             columns: ["lead_id"];
             isOneToOne: false;
             referencedRelation: "leads";
