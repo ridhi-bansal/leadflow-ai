@@ -24,7 +24,7 @@ export type Timeline =
 
 export type QualificationCategory = 'HIGH' | 'MEDIUM' | 'LOW';
 
-export type CommunicationStatus = 'DRAFT' | 'APPROVED' | 'REJECTED';
+export type CommunicationStatus = 'DRAFT' | 'APPROVED' | 'REJECTED' | 'SENT';
 
 export type CommunicationType = 'initial_reply' | 'follow_up_1' | 'follow_up_2';
 
@@ -37,6 +37,21 @@ export interface LeadInput {
   currency: Currency;
   timeline?: Timeline | string;
   message: string;
+  source?: string;
+}
+
+export interface ExtractedLeadData {
+  name: string;
+  email: string;
+  company: string | null;
+  service: string | null;
+  budget: number | null;
+  currency: Currency;
+  timeline: string | null;
+  message: string;
+  specific_requirements: string[];
+  notes?: string;
+  source: 'email';
 }
 
 export interface Lead {
@@ -103,6 +118,8 @@ export interface Communication {
   created_at: string;
   updated_at: string;
   approved_at: string | null;
+  sent_at?: string | null;
+  gmail_message_id?: string | null;
 }
 
 export interface AIEmailDraft {

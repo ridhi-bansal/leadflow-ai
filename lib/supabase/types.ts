@@ -92,6 +92,8 @@ export type Database = {
           created_at: string;
           updated_at: string;
           approved_at: string | null;
+          sent_at: string | null;
+          gmail_message_id: string | null;
         };
         Insert: {
           id?: string;
@@ -103,6 +105,8 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           approved_at?: string | null;
+          sent_at?: string | null;
+          gmail_message_id?: string | null;
         };
         Update: {
           id?: string;
@@ -114,6 +118,8 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           approved_at?: string | null;
+          sent_at?: string | null;
+          gmail_message_id?: string | null;
         };
         Relationships: [
           {
@@ -124,6 +130,45 @@ export type Database = {
             referencedColumns: ["id"];
           }
         ];
+      };
+      oauth_tokens: {
+        Row: {
+          id: string;
+          provider: string;
+          access_token: string;
+          refresh_token: string | null;
+          scope: string | null;
+          token_type: string | null;
+          expiry_date: number | null;
+          email: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          provider?: string;
+          access_token: string;
+          refresh_token?: string | null;
+          scope?: string | null;
+          token_type?: string | null;
+          expiry_date?: number | null;
+          email?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider?: string;
+          access_token?: string;
+          refresh_token?: string | null;
+          scope?: string | null;
+          token_type?: string | null;
+          expiry_date?: number | null;
+          email?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
     };
     Views: {

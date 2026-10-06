@@ -1,10 +1,13 @@
 import {
   AILeadAnalysis,
+  Lead,
   LeadInput,
   QualificationCategory,
   QualificationResult,
   ScoringFactor,
 } from '@/types/lead';
+
+import { normalizeService } from '@/lib/validations/normalization';
 
 /**
  * Service-specific budget thresholds for American digital marketing agencies.
@@ -28,20 +31,7 @@ export const SERVICE_BUDGET_THRESHOLDS: Record<string, ServiceBudgetThreshold> =
  * Normalizes service string to match threshold keys
  */
 function matchServiceKey(serviceName: string): string {
-  const lower = serviceName.toLowerCase();
-  if (lower.includes('web') || lower.includes('site') || lower.includes('ecommerce') || lower.includes('app')) {
-    return 'Website Development';
-  }
-  if (lower.includes('brand') || lower.includes('design') || lower.includes('logo')) {
-    return 'Branding & Design';
-  }
-  if (lower.includes('social') || lower.includes('content') || lower.includes('instagram')) {
-    return 'Social Media';
-  }
-  if (lower.includes('ad') || lower.includes('ppc') || lower.includes('marketing') || lower.includes('seo')) {
-    return 'Digital Advertising';
-  }
-  return 'Other';
+  return normalizeService(serviceName);
 }
 
 /**
@@ -227,3 +217,39 @@ export function calculateQualificationScore(
     analysis: aiAnalysis,
   };
 }
+
+/**
+ * Reconstructs the 7 scoring factors from a stored Lead record for transparent UI display.
+ */
+export function reconstructFactorsFromLead(lead: Lead): ScoringFactor[] {
+  const syntheticInput: LeadInput = {
+    name: lead.name,
+    email: lead.email,
+    company: lead.company || undefined,
+    service: lead.service || undefined,
+    budget: lead.budget,
+    currency: lead.currency || 'USD',
+    timeline: lead.timeline || undefined,
+    message: lead.message,
+    source: lead.source,
+  };
+
+  const syntheticAnalysis: AILeadAnalysis = {
+    service: lead.service || 'Unknown',
+    budget: lead.budget,
+    currency: lead.currency || 'USD',
+    timeline: lead.timeline || 'Unspecified',
+    intent: lead.intent || 'Medium',
+    urgency: lead.urgency || 'Medium',
+    company_identified: Boolean(lead.company && lead.company.trim().length > 0),
+    specific_requirements: [],
+    summary: lead.ai_summary || '',
+    reasoning: lead.ai_reasoning || '',
+    missing_information: lead.missing_information || [],
+    recommended_action: lead.recommended_action || 'Review inquiry',
+  };
+
+  const result = calculateQualificationScore(syntheticInput, syntheticAnalysis);
+  return result.factors;
+}
+

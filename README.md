@@ -1,9 +1,8 @@
 # LeadFlow AI 🚀
 
-An AI-powered lead qualification and follow-up system built for small American digital marketing agencies.
+An AI-powered lead qualification and human-in-the-loop sales follow-up system built for small American digital marketing agencies.
 
-> **Current Status: Milestone 2 (AI-Generated Email Draft & Human Approval)**  
-> Complete implementation of: `Lead Intake Form` → `Supabase Database` → `Google Gemini AI Qualification` → `Deterministic Scoring` → `AI Email Reply Draft` → `Human Review & Edit` → `Explicit Human Approval`.
+> **Architecture:** Complete implementation of: `Flexible Lead Intake (Structured Form & Paste Email)` → `Supabase Database` → `Google Gemini AI Qualification` → `Deterministic Heuristic Scoring` → `Priority Matrix (A/B/C)` → `AI Email Reply Draft` → `Human Review & Edit` → `Human Approval` → `Human-in-the-Loop mailto: Email Composer Handoff` → `Copy Email Fallback`.
 
 ---
 
@@ -15,25 +14,26 @@ An AI-powered lead qualification and follow-up system built for small American d
 - **Social Media Management**
 - **Digital Advertising & PPC**
 
-LeadFlow AI automates the lead analysis and sales reply drafting pipeline:
-1. Ingests inquiries through a clean US-market-tailored lead intake form.
-2. Persists leads securely in **Supabase PostgreSQL** with strict Row Level Security.
-3. Sends inquiries to **Google Gemini API** (`@google/genai` structured JSON schema) to extract key business signals.
-4. Deterministically evaluates signals using a 100-point agency heuristic scoring engine.
-5. Generates a personalized initial reply draft tailored to the lead's exact scope, budget, and timeline.
-6. **Human-in-the-Loop:** Agency staff reviews, edits subject/body in real-time, and explicitly approves the draft (`DRAFT` $\rightarrow$ `APPROVED`).
-
-> ⚠️ **Note:** Email sending (Gmail/Resend/SMTP/n8n) is **NOT** implemented in Milestone 2. Approved emails are persisted with status `APPROVED` and `approved_at` timestamp ready for future automated dispatch.
+LeadFlow AI automates the lead analysis, reply drafting, and delivery workflow:
+1. **Flexible Intake:** Ingests inquiries through a clean structured form (Mode A) or raw unformatted email paste with instant Gemini field extraction and interactive review (Mode B).
+2. **Secure Persistence:** Persists leads securely in **Supabase PostgreSQL** with strict Row Level Security.
+3. **AI Signal Extraction:** Sends inquiries to **Google Gemini API** (`@google/genai` structured JSON schema) to extract key business signals, intent, and requirements.
+4. **Deterministic Heuristic Scoring:** Deterministically evaluates signals using a transparent 100-point agency scoring engine across 7 objective factors.
+5. **Priority Action Matrix:** Categorizes leads into actionable tiers: **A — Respond Now**, **B — Review & Scope**, and **C — Low / Exploratory**.
+6. **AI Email Draft Generation:** Crafts a personalized, professional plain-text response referencing the prospect's exact deliverables, timeline, and budget.
+7. **Human-in-the-Loop Review:** Agency staff reviews, edits subject/body in real-time, and explicitly approves the draft (`DRAFT` $\rightarrow$ `APPROVED`).
+8. **Email Client Handoff:** Click **"Open Email Composer"** to open the user's default email client (`mailto:`) with recipient, subject, and approved body pre-filled. LeadFlow AI does not falsely claim automated delivery; the user reviews and clicks Send manually. A **"Copy Email"** fallback is provided for maximum compatibility.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Framework:** [Next.js 15 (App Router)](https://nextjs.org/) + React 19
+- **Framework:** [Next.js 15/16 (App Router)](https://nextjs.org/) + React 19
 - **Language:** TypeScript 5 (strict typing)
 - **Styling:** Tailwind CSS + Lucide Icons
 - **Database:** [Supabase](https://supabase.com/) (PostgreSQL with Row Level Security)
-- **AI Engine:** Google Gemini (`@google/genai` SDK with Structured Outputs)
+- **AI Engine:** Google Gemini (`@google/genai` SDK with Structured Outputs & Resilient Fallback)
+- **Email Handoff:** Human-approved `mailto:` email composer handoff + clipboard fallback
 - **Validation:** Zod 3
 
 ---
@@ -43,20 +43,21 @@ LeadFlow AI automates the lead analysis and sales reply drafting pipeline:
 ### `leads` Table
 Stores contact information, inquiry message, and qualification results.
 - `id` (UUID, Primary Key)
-- `name`, `email`, `company`, `message`, `source`, `service`, `budget`, `currency`, `timeline`
+- `name`, `email`, `company`, `message`, `source` (`'form'` | `'email'`), `service`, `budget`, `currency`, `timeline`
 - `ai_score` (0–100), `qualification` (`HIGH` | `MEDIUM` | `LOW`), `intent`, `urgency`, `ai_summary`, `ai_reasoning`, `missing_information`, `recommended_action`
 - `status` (`NEW` | `AI_ANALYZED` | `AI_ANALYSIS_FAILED` | `PENDING_APPROVAL` | `APPROVED`)
 - `created_at`, `updated_at`
 
-### `communications` Table (Milestone 2)
-Stores AI-generated drafts and human approval records.
+### `communications` Table
+Stores AI-generated drafts, human editing history, and approval timestamps.
 - `id` (UUID, Primary Key)
 - `lead_id` (UUID, Foreign Key $\rightarrow$ `leads.id` ON DELETE CASCADE)
 - `type` (e.g. `'initial_reply'`)
 - `subject` (Text)
 - `body` (Text)
-- `status` (`DRAFT` | `APPROVED` | `REJECTED`)
-- `created_at`, `updated_at`, `approved_at` (Timestamps)
+- `status` (`DRAFT` | `APPROVED` | `REJECTED` | `SENT`)
+- `created_at`, `updated_at`, `approved_at`, `sent_at` (Timestamps)
+- `gmail_message_id` (Text, optional historical field)
 
 ---
 
@@ -65,12 +66,15 @@ Stores AI-generated drafts and human approval records.
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/leads` | Ingests a new lead into Supabase (`status: NEW`). |
-| `GET` | `/api/leads/[id]` | Server-side retrieval of a lead. |
+| `GET` | `/api/leads` | Lists leads with keyword search (`q`), tier/status/source/service filters, and sorting. |
+| `GET` | `/api/leads/[id]` | Server-side retrieval of a specific lead record. |
+| `POST` | `/api/leads/extract-email` | Extracts structured lead fields from raw pasted email using Gemini. |
 | `POST` | `/api/leads/[id]/analyze` | Triggers Gemini AI qualification & deterministic scoring (`status: AI_ANALYZED`). |
 | `POST` | `/api/leads/[id]/draft` | Generates or regenerates a personalized email draft (`status: PENDING_APPROVAL`). |
-| `GET` | `/api/leads/[id]/draft` | Fetches the latest communication draft for a lead. |
+| `GET` | `/api/leads/[id]/draft` | Fetches the communication draft for a lead. |
+| `GET` | `/api/drafts` | Lists all communication drafts joined with lead metadata for Drafts view. |
 | `PATCH` | `/api/communications/[id]` | Saves manual human edits to a draft's subject and body. |
-| `POST` | `/api/communications/[id]/approve` | Explicitly approves the email draft (`status: APPROVED`, records `approved_at`). |
+| `POST` | `/api/communications/[id]/approve` | Approves email draft (`status: APPROVED`, records `approved_at`). |
 
 ---
 
@@ -81,7 +85,7 @@ Stores AI-generated drafts and human approval records.
 | **Clear Service Requirement** | `+25` | Service explicitly chosen or extracted from inquiry |
 | **Budget Provided** | `+20` | Numeric budget specified in form or message |
 | **Realistic Budget** | `+15` | Budget meets configurable threshold for service (e.g. Website Development ≥ $2,500) |
-| **Clear Timeline** | `+15` | Timeframe stated (e.g. "Within 1 month", "ASAP") |
+| **Clear Timeline** | `+15` | Timeframe stated (e.g. "Within 1 month", "November 15", "ASAP") |
 | **Strong Buying Intent** | `+15` | High purchase signal / ready-to-hire intent detected |
 | **Business / Company Identified** | `+5` | Legitimate business/brand identified |
 | **Specific Requirements** | `+5` | Clear deliverables / feature specifications listed |
@@ -111,12 +115,12 @@ SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
 
 # Google Gemini API Configuration
 GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.8-flash
 ```
 
-### 3. Run Database Migrations
+### 3. Database Migrations
 
-Execute the SQL files in `supabase/migrations/` inside your Supabase project:
+Run the SQL migration scripts in your Supabase project SQL Editor:
 1. `supabase/migrations/20261005000000_create_leads_table.sql`
 2. `supabase/migrations/20261005000001_create_communications_table.sql`
 
@@ -130,38 +134,9 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## 🧪 Testing the Complete Workflow (Sarah Mitchell Test Lead)
-
-1. Click **"Load Sarah Mitchell Example (US Lead)"** on the intake form:
-   - **Name:** Sarah Mitchell
-   - **Email:** `sarah@oakandthread.com`
-   - **Company:** Oak & Thread Apparel
-   - **Service:** Website Development
-   - **Budget:** `$8,000` (USD)
-   - **Timeline:** `Within 1 month`
-   - **Message:** *"Hi, I'm launching a new clothing brand called Oak & Thread Apparel and I'm looking for someone to build an ecommerce website for us. We'd like to launch within the next month and have a budget of around $8,000. We're looking for a clean, modern site with product pages, checkout, and basic email signup. We'd love to know what the next steps would be."*
-2. Click **Submit & Qualify Lead**.
-3. View the qualification card: **HIGH (90+/100)** score with all 7 breakdown points.
-4. Observe the **AI Generated Draft** section below:
-   - Subject: Personalized Re: line.
-   - Body: Warm, consultative message acknowledging Oak & Thread Apparel, ecommerce scope, and $8k budget.
-5. Click **Edit Draft** to make adjustments and click **Save Edits**.
-6. Click **Approve Email**:
-   - Status updates to **HUMAN APPROVED**.
-   - `approved_at` timestamp is recorded in Supabase.
-
----
-
-## 🗺️ Roadmap & Milestones
-
-- [x] **Milestone 1:** Lead Form → Supabase Storage → Gemini AI Extraction → Deterministic Scoring → Result UI
-- [x] **Milestone 2:** AI Reply Draft Generation → In-App Editing → Explicit Human Approval (`communications` table)
-- [ ] **Milestone 3:** Email Dispatch (Resend/Gmail integration) & Communication History
-- [ ] **Milestone 4:** n8n Workflow Orchestration & Automated Follow-up Scheduling
-
----
-
 ## 🔒 Security & Privacy
 
-- `GEMINI_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are server-side only and never exposed to the client bundle.
-- Public anonymous users can only submit leads via `POST /api/leads`. All read, analysis, draft generation, editing, and approval actions are protected server-side with service-role credentials.
+- All Gemini API calls and Supabase admin operations run **strictly server-side**.
+- No API keys or service role secrets are ever exposed to the client.
+- RLS protects all tables; communication records are accessible only server-side via `SUPABASE_SERVICE_ROLE_KEY`.
+- The human-in-the-loop email handoff generates client-side `mailto:` links directly from the approved database record, ensuring complete user visibility and manual control before sending.

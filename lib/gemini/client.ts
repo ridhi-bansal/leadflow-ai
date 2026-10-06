@@ -1,6 +1,10 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { AILeadAnalysis, LeadInput, AIEmailDraft, Lead } from '@/types/lead';
-import { aiLeadAnalysisSchema, aiEmailDraftSchema } from '@/lib/validations/lead';
+import { AILeadAnalysis, LeadInput, AIEmailDraft, Lead, ExtractedLeadData } from '@/types/lead';
+import {
+  aiLeadAnalysisSchema,
+  aiEmailDraftSchema,
+  extractedLeadSchema,
+} from '@/lib/validations/lead';
 
 /**
  * Initializes Google Gen AI SDK client.
@@ -100,14 +104,79 @@ const emailDraftResponseSchema = {
   properties: {
     subject: {
       type: Type.STRING,
-      description: 'A compelling, personalized, and professional email subject line for the initial agency reply (e.g. "Re: Website Development for Oak & Thread Apparel")',
+      description:
+        'A compelling, personalized, and professional email subject line for the initial agency reply (e.g. "Re: Website Development for Oak & Thread Apparel")',
     },
     body: {
       type: Type.STRING,
-      description: 'The full personalized email body text, formatted cleanly with paragraph breaks, warm greeting, specific references to their inquiry, and sign-off from Northstar Studio.',
+      description:
+        'The full personalized email body in STRICT PLAIN TEXT ONLY. Must use standard double-newlines (\\n\\n) between paragraphs. Absolutely NO markdown links (e.g. [text](url)), NO mailto: links, NO html tags, and NO raw markdown formatting.',
     },
   },
   required: ['subject', 'body'],
+};
+
+/**
+ * Structured schema definition for Gemini raw email lead extraction
+ */
+const extractLeadEmailResponseSchema = {
+  type: Type.OBJECT,
+  properties: {
+    name: {
+      type: Type.STRING,
+      description: 'The contact person\'s full name extracted from the email sender, greeting, or signature.',
+    },
+    email: {
+      type: Type.STRING,
+      description: 'The contact person\'s email address extracted from the header, From line, or text.',
+    },
+    company: {
+      type: Type.STRING,
+      description: 'The business, company, brand, or startup name mentioned in the email, or null if unknown.',
+    },
+    service: {
+      type: Type.STRING,
+      description:
+        'The best matching agency service category: Website Development, Branding & Design, Social Media, Digital Advertising, or Other.',
+    },
+    budget: {
+      type: Type.NUMBER,
+      description: 'The numeric budget amount mentioned in the email (e.g. 8000 for $8,000), or null if none mentioned.',
+    },
+    currency: {
+      type: Type.STRING,
+      description: 'The currency code (USD, EUR, GBP, CAD, AUD). Default to USD if unspecified.',
+    },
+    timeline: {
+      type: Type.STRING,
+      description:
+        'The requested timeline or launch date (e.g. "Within 1 month", "ASAP", "1–3 months", "Flexible", or null).',
+    },
+    message: {
+      type: Type.STRING,
+      description:
+        'A clean, coherent, and complete extracted message describing their project needs and inquiry.',
+    },
+    specific_requirements: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: 'Key deliverables, features, or requirements mentioned in the email.',
+    },
+    notes: {
+      type: Type.STRING,
+      description: 'Any notable context or extraction observations for the sales team.',
+    },
+  },
+  required: [
+    'name',
+    'email',
+    'company',
+    'service',
+    'currency',
+    'timeline',
+    'message',
+    'specific_requirements',
+  ],
 };
 
 const SYSTEM_INSTRUCTION = `You are a senior lead qualification analyst for Northstar Studio, a premier American digital agency specializing in Website Development, Branding & Design, Social Media, and Digital Advertising.
@@ -136,17 +205,42 @@ const EMAIL_DRAFT_SYSTEM_INSTRUCTION = `You are a professional, senior client st
 
 Your job is to craft a warm, highly personalized, concise, and professional initial response email to an incoming prospect.
 
-STRICT WRITING RULES:
-1. PERSONALIZED & SPECIFIC: Reference their specific brand/company name, requested service, and key requirements mentioned in their message (e.g., ecommerce functionality, checkout, product pages, brand identity).
-2. ONLY USE FACTUAL INFORMATION: Only reference budget, timeline, and requirements that the prospect actually provided. If budget or timeline was NOT provided, DO NOT fabricate or invent numbers or dates.
-3. PROHIBITED PHRASING & TOPICS:
+STRICT FORMATTING & WRITING RULES:
+1. STRICT PLAIN TEXT ONLY:
+   - Do NOT use markdown links like [Schedule a call](https://cal.com/northstar) or [email](mailto:...).
+   - Do NOT use mailto: links.
+   - Do NOT use HTML formatting (<p>, <a>, <br>).
+   - Format paragraphs cleanly using double-newlines (\\n\\n).
+   - Format the salutation on its own line followed by a blank line (e.g. "Hi Sarah,\\n\\n").
+   - Format the closing and signature on separate clean lines (e.g. "\\n\\nBest regards,\\nAlex Morgan\\nClient Strategy Director, Northstar Studio\\nhello@northstarstudio.com").
+
+2. PERSONALIZED & SPECIFIC: Reference their specific brand/company name, requested service, and key requirements mentioned in their message (e.g., ecommerce functionality, checkout, product pages, brand identity).
+
+3. ONLY USE FACTUAL INFORMATION: Only reference budget, timeline, and requirements that the prospect actually provided. If budget or timeline was NOT provided, DO NOT fabricate or invent numbers or dates.
+
+4. PROHIBITED PHRASING & TOPICS:
    - NEVER mention AI, artificial intelligence, automated analysis, qualification scores, algorithms, or "LeadFlow AI".
    - NEVER claim that you or Northstar Studio have already spoken with them, met with them, or scheduled a meeting.
    - NEVER make binding financial guarantees, exact quote promises, or unsupported delivery commitments.
    - NEVER sound robotic or use boilerplate filler phrases.
-4. TONE & STYLE: Warm, consultative, authoritative, helpful, and natural for an American creative agency.
-5. CALL TO ACTION: Propose an easy next step (e.g., a brief 15-minute discovery call this week to discuss their goals, architecture, and timeline).
-6. SIGN-OFF: Sign off warmly from the team at Northstar Studio (e.g. "Best regards,\\nThe Northstar Studio Team\\nhello@northstarstudio.com").`;
+
+5. TONE & STYLE: Warm, consultative, authoritative, helpful, and natural for an American creative agency.
+
+6. CALL TO ACTION: Propose an easy next step (e.g., a brief 15-minute discovery call this week to discuss their goals, architecture, and timeline).`;
+
+const EXTRACT_LEAD_EMAIL_SYSTEM_INSTRUCTION = `You are an expert lead ingestion intelligence engine for Northstar Studio.
+Your job is to extract structured lead information from raw, unformatted, or pasted prospect email inquiries.
+
+EXTRACTION RULES:
+1. Extract the sender's full name, email address, company/brand name, requested service, budget amount, currency, and timeline.
+2. If the budget is mentioned (e.g., "$8k", "$8,000", "8000 USD", "around 10k euros"), convert it to an exact integer (e.g., 8000, 10000) and identify the currency (USD, EUR, GBP, CAD, AUD).
+3. If no budget is specified, set budget to null.
+4. If company name is not mentioned, set company to null.
+5. If email address is not in the text or headers, set email to an empty string.
+6. Service should be classified into one of: "Website Development", "Branding & Design", "Social Media", "Digital Advertising", or "Other".
+7. Extract a clean, coherent message containing the core inquiry without email header clutter or disclaimers.
+8. Extract specific deliverables or requirements into specific_requirements.
+9. DO NOT invent facts not present in the raw email.`;
 
 /**
  * Get ordered candidate models (configured model first, followed by resilient active flash models).
@@ -365,9 +459,101 @@ Generate a natural, compelling, and professional email subject line and body. Re
       throw new Error('Gemini email draft did not match the expected structure.');
     }
 
-    return validated.data;
+    // Clean plain text: remove any stray markdown links [text](url) -> text, and mailto: links
+    const cleanBody = cleanPlainTextEmail(validated.data.body);
+
+    return {
+      subject: validated.data.subject.trim(),
+      body: cleanBody,
+    };
   } catch (error) {
     console.error('Error during Gemini email draft generation:', error);
     throw error;
   }
 }
+
+/**
+ * Strips markdown links, mailto links, and HTML tags to enforce clean plain text.
+ */
+function cleanPlainTextEmail(text: string): string {
+  if (!text) return '';
+
+  return (
+    text
+      // Replace markdown link [Label](url) with Label (or url if label is URL)
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) => {
+        if (label === url) return label;
+        if (url.startsWith('mailto:')) return label;
+        return `${label} (${url})`;
+      })
+      // Strip mailto: prefixes
+      .replace(/mailto:/gi, '')
+      // Strip any stray HTML tags
+      .replace(/<[^>]*>/g, '')
+      // Normalize multiple carriage returns
+      .replace(/\r\n/g, '\n')
+      // Remove trailing whitespace per line
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .join('\n')
+      .trim()
+  );
+}
+
+/**
+ * Extracts structured lead data from a pasted/raw prospect email using Gemini.
+ */
+export async function extractLeadFromPastedEmail(
+  rawEmail: string
+): Promise<ExtractedLeadData> {
+  const ai = getGeminiClient();
+
+  const userPrompt = `Please parse and extract structured lead details from the following incoming raw email inquiry for Northstar Studio:
+
+RAW EMAIL CONTENT:
+"""
+${rawEmail}
+"""
+
+Extract the fields according to the schema rules and return structured JSON.`;
+
+  try {
+    const response = await callGeminiWithModelFallback(async (modelName) => {
+      return await ai.models.generateContent({
+        model: modelName,
+        contents: userPrompt,
+        config: {
+          systemInstruction: EXTRACT_LEAD_EMAIL_SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          responseSchema: extractLeadEmailResponseSchema,
+          temperature: 0.1,
+        },
+      });
+    });
+
+    const responseText = response.text;
+    if (!responseText) {
+      const candidate = response.candidates?.[0];
+      throw new Error(
+        `Gemini returned an empty email extraction response. Finish reason: ${candidate?.finishReason || 'UNKNOWN'}`
+      );
+    }
+
+    const rawParsed = JSON.parse(responseText);
+    const validated = extractedLeadSchema.safeParse(rawParsed);
+
+    if (!validated.success) {
+      console.error('Gemini lead extraction validation errors:', validated.error.format());
+      throw new Error('Gemini lead extraction did not match the expected structure.');
+    }
+
+    return {
+      ...validated.data,
+      source: 'email',
+    };
+  } catch (error) {
+    console.error('Error during Gemini email lead extraction:', error);
+    throw error;
+  }
+}
+

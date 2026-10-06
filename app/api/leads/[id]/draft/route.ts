@@ -137,7 +137,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .single();
 
       if (updateError || !updated) {
-        throw new Error('Failed to update existing communication record in Supabase');
+        console.error('Failed to update communication record in Supabase:', updateError);
+        throw new Error(updateError?.message || 'Failed to update existing communication record in Supabase');
       }
       savedCommunication = updated;
     } else {
@@ -155,7 +156,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .single();
 
       if (insertError || !inserted) {
-        throw new Error('Failed to save generated email draft to Supabase');
+        console.error('Failed to insert communication record in Supabase:', insertError);
+        throw new Error(insertError?.message || 'Failed to save generated email draft to Supabase');
       }
       savedCommunication = inserted;
     }

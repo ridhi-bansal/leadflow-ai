@@ -1,36 +1,90 @@
 import { z } from 'zod';
+import {
+  normalizeService,
+  normalizeCurrency,
+  normalizeTimeline,
+} from './normalization';
 
 export const leadInputSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
   email: z.string().trim().email('Please enter a valid email address'),
-  company: z.string().trim().optional().or(z.literal('')),
+  company: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal(''))
+    .nullable()
+    .transform((val) => val || null),
   service: z
-    .enum([
-      'Website Development',
-      'Branding & Design',
-      'Social Media',
-      'Digital Advertising',
-      'Other',
-    ])
+    .string()
+    .trim()
     .optional()
-    .or(z.literal('')),
+    .or(z.literal(''))
+    .nullable()
+    .transform((val) => (val ? normalizeService(val) : null)),
   budget: z
-    .union([z.number().positive('Budget must be greater than 0'), z.nan(), z.null()])
+    .union([z.number().positive('Budget must be greater than 0'), z.nan(), z.null(), z.string()])
     .optional()
-    .transform((val) => (val === null || (typeof val === 'number' && isNaN(val)) ? null : val)),
-  currency: z.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']).default('USD'),
+    .transform((val) => {
+      if (val === null || val === undefined || val === '') return null;
+      const num = typeof val === 'number' ? val : Number(val);
+      return isNaN(num) || num <= 0 ? null : num;
+    }),
+  currency: z
+    .string()
+    .optional()
+    .default('USD')
+    .transform((val) => normalizeCurrency(val)),
   timeline: z
-    .enum([
-      'ASAP',
-      'Within 1 week',
-      'Within 1 month',
-      '1–3 months',
-      'Flexible',
-      'Not decided',
-    ])
+    .string()
+    .trim()
     .optional()
-    .or(z.literal('')),
+    .or(z.literal(''))
+    .nullable()
+    .transform((val) => (val ? normalizeTimeline(val) : null)),
   message: z.string().trim().min(10, 'Please provide a descriptive message (at least 10 characters)'),
+  source: z.string().optional().default('form'),
+});
+
+export const extractEmailInputSchema = z.object({
+  rawEmail: z.string().trim().min(10, 'Please paste a valid email inquiry (at least 10 characters)'),
+});
+
+export const extractedLeadSchema = z.object({
+  name: z.string().default(''),
+  email: z.string().default(''),
+  company: z
+    .string()
+    .nullable()
+    .default(null)
+    .transform((val) => val || null),
+  service: z
+    .string()
+    .nullable()
+    .default('Website Development')
+    .transform((val) => (val ? normalizeService(val) : 'Website Development')),
+  budget: z
+    .union([z.number(), z.string(), z.null()])
+    .optional()
+    .transform((val) => {
+      if (val === null || val === undefined || val === '') return null;
+      const num = typeof val === 'number' ? val : Number(val);
+      return isNaN(num) || num <= 0 ? null : num;
+    }),
+  currency: z
+    .string()
+    .optional()
+    .default('USD')
+    .transform((val) => normalizeCurrency(val)),
+  timeline: z
+    .string()
+    .nullable()
+    .default(null)
+    .transform((val) => (val ? normalizeTimeline(val) : null)),
+  message: z.string().default(''),
+  specific_requirements: z.array(z.string()).default([]),
+  notes: z.string().optional().default(''),
+  source: z.literal('email').default('email'),
 });
 
 export const aiLeadAnalysisSchema = z.object({
@@ -59,6 +113,8 @@ export const updateCommunicationSchema = z.object({
 });
 
 export type LeadInputSchemaType = z.infer<typeof leadInputSchema>;
+export type ExtractEmailInputSchemaType = z.infer<typeof extractEmailInputSchema>;
+export type ExtractedLeadSchemaType = z.infer<typeof extractedLeadSchema>;
 export type AILeadAnalysisSchemaType = z.infer<typeof aiLeadAnalysisSchema>;
 export type AIEmailDraftSchemaType = z.infer<typeof aiEmailDraftSchema>;
 export type UpdateCommunicationSchemaType = z.infer<typeof updateCommunicationSchema>;
