@@ -157,16 +157,12 @@ export default function Home() {
               <span>—</span>
               <span>Portfolio Project for Northstar Studio</span>
             </div>
-            <div className="flex items-center gap-4 text-slate-400">
-              <span>Next.js 15 App Router</span>
-              <span>•</span>
-              <span>Supabase PostgreSQL</span>
-              <span>•</span>
-              <span>Google Gen AI SDK</span>
+            <div className="flex items-center gap-2 text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full text-[11px] font-medium border border-slate-200/80">
+              <span>Portfolio Project · Fictional Client Data · No real customer information</span>
             </div>
           </div>
           <p className="text-[11px] text-slate-400 text-center sm:text-left leading-relaxed">
-            LeadFlow uses AI for lead analysis and message drafting. Business-state decisions such as scoring, priority, follow-up timing, and response status are handled deterministically or by human input.
+            LeadFlow uses AI for natural language analysis and draft composition. Business-state decisions such as scoring, priority, follow-up timing, and response status are handled deterministically or by human input.
           </p>
         </div>
       </footer>
