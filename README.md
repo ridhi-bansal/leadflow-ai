@@ -1,119 +1,154 @@
-# LeadFlow AI 🚀
+# LeadFlow AI
 
-An AI-powered lead qualification and human-in-the-loop sales follow-up system built for small American digital marketing agencies.
+An AI-assisted CRM that qualifies inbound leads, scores and prioritizes opportunities, generates personalized email drafts, tracks responses, recommends follow-ups, and exports the pipeline to Excel.
 
-> **Architecture:** Complete implementation of: `Flexible Lead Intake (Structured Form & Paste Email)` → `Supabase Database` → `Google Gemini AI Qualification` → `Deterministic Heuristic Scoring` → `Operational Priority Matrix` → `AI Email Reply Draft` → `Human Review & Edit` → `Human Approval` → `mailto: Email Composer Handoff` → `Manual Response Tracking` → `Deterministic Follow-Up Recommendations` → `Human-Approved Follow-Up Drafts`.
-
----
-
-## 📖 Overview
-
-**Northstar Studio** is a small American digital marketing agency offering:
-- **Website Development**
-- **Branding & Design**
-- **Social Media Management**
-- **Digital Advertising & PPC**
-
-LeadFlow AI orchestrates the entire inbound sales pipeline with complete human oversight:
-1. **Flexible Intake:** Ingests inquiries through a clean structured form (Mode A) or raw unformatted email paste with instant Gemini field extraction and interactive review (Mode B).
-2. **Secure Persistence:** Persists leads securely in **Supabase PostgreSQL** with strict Row Level Security.
-3. **AI Signal Extraction:** Sends inquiries to **Google Gemini API** (`@google/genai` structured JSON schema) to extract key business signals, intent, and requirements.
-4. **Deterministic Heuristic Scoring:** Deterministically evaluates signals using a transparent 100-point agency scoring engine across 7 objective factors.
-5. **Operational Priority & Action Center:** Categorizes leads into actionable operational buckets: **🔴 Act / Follow Up Today**, **🟢 Needs Response Review (Replied)**, **🟡 Review & Scope**, and **⚪ Low / Dormant**.
-6. **AI Email Draft Generation:** Crafts personalized, professional plain-text responses referencing the prospect's exact deliverables, timeline, and budget.
-7. **Human-in-the-Loop Review:** Agency staff reviews, edits subject/body in real-time, and explicitly approves the draft (`DRAFT` $\rightarrow$ `APPROVED`).
-8. **Email Client Handoff:** Click **"Open Email Composer"** to open the user's default email client (`mailto:`) with recipient, subject, and approved body pre-filled. A **"Copy Email"** fallback is provided for maximum compatibility.
-9. **Manual Response Tracking:** Agency staff explicitly marks whether a prospect is `Waiting for Response`, has `Replied`, or resulted in `No Response`.
-10. **Deterministic Follow-Up Intelligence:** Deterministically calculates business-day follow-up schedules (skipping weekends) and generates contextual follow-up drafts for human approval.
-11. **Polished Multi-Sheet Excel CRM Export:** Download structured CRM pipeline snapshots in professional `.xlsx` format (either All Leads or filtered Current View), with formatted headers, AutoFilters, follow-up history, and operational KPI summaries.
-
-> [!NOTE]
-> **Portfolio Transparency:** LeadFlow uses AI for natural language analysis and draft composition. All business-state transitions (scoring, priority tiering, follow-up timing, response tracking, and CRM exports) are handled deterministically or by direct human action. Automated inbox monitoring and automated background email sending are intentionally excluded.
+> **Portfolio Project for Northstar Studio**
+> *Northstar Studio and all lead data used in this project are fictional.*
 
 ---
 
-## 🔁 Lead & Follow-Up Operational Lifecycle
+## Overview
+
+Small digital marketing agencies frequently lose high-value deals due to slow intake, inconsistent lead qualification, and delayed follow-ups. Inquiries arrive through disparate channels with varying levels of detail—from comprehensive budget specifications to vague one-line emails.
+
+**LeadFlow AI** solves this by combining natural language processing with deterministic business logic:
+1. **Intake & Signal Extraction:** Ingests structured form submissions or unformatted raw prospect emails using Google Gemini to extract key parameters (service, budget, currency, timeline, intent, requirements).
+2. **Objective Qualification & Scoring:** Evaluates inquiries against a transparent 100-point agency rubric to assign objective qualification tiers (High, Medium, Low).
+3. **Operational Prioritization:** Categorizes opportunities into actionable operational queues (🔴 Act Today, 🟢 Replied / Needs Review, 🟡 Review & Scope, ⚪ Low / Dormant).
+4. **Assisted Communication:** Crafts tailored, plain-text response drafts referencing specific client deliverables and timelines for human review and approval.
+5. **Email Client Handoff:** Hands approved drafts directly to the user's default email client (`mailto:`) or clipboard.
+6. **Follow-Up Intelligence:** Tracks response states manually and calculates business-day follow-up schedules.
+7. **CRM Data Export:** Produces multi-sheet Excel workbooks (`.xlsx`) capturing leads, follow-up logs, and pipeline summaries.
+
+---
+
+## Workflow Architecture
 
 ```text
-Lead Submitted / Pasted
-         ↓
-Gemini AI Analysis
-         ↓
-Deterministic Scoring (0–100) & Priority Tiering
-         ↓
-AI Initial Reply Draft Generated
-         ↓
-Human Review, Edit & Approval
-         ↓
-Open in Email Composer (mailto:)
-         ↓
-Waiting for Response (Manual Tracking)
-         ├─────────────────────────────────────────┐
-         ↓                                         ↓
-   Mark as Replied                         Mark as No Response
-         ↓                                         ↓
-  Follow-ups Paused                         Follow-Up #1 Recommended (2 Business Days)
-         ↓                                         ↓
-Human Conversation Review                   AI Draft → Human Approval → Compose
-                                                   ↓
-                                           Waiting for Response
-                                                   ├─────────────────────────┐
-                                                   ↓                         ↓
-                                             Mark as Replied         Mark as No Response
-                                                   ↓                         ↓
-                                            Follow-ups Paused         Follow-Up #2 Recommended (4 Business Days)
-                                                                             ↓
-                                                                      AI Draft → Human Approval → Compose
-                                                                             ↓
-                                                                      Sequence Stopped / Dormant
+Inbound Inquiry (Form / Paste Email)
+               │
+               ▼
+   Supabase PostgreSQL Storage
+               │
+               ▼
+      Google Gemini API
+  (Structured Parameter Extraction)
+               │
+               ▼
+Deterministic Scoring Engine (0–100)
+               │
+               ▼
+  Operational Priority Assignment
+  (Act Today / Scope / Dormant / Replied)
+               │
+               ▼
+   AI Email Draft Generation
+               │
+               ▼
+  Human Review, Edit & Approval
+               │
+               ▼
+ Email Client Handoff (mailto:)
+               │
+               ▼
+   Manual Response Tracking
+   (Waiting / Replied / No Response)
+               │
+               ▼
+Deterministic Follow-Up Scheduling
+   (+2 / +4 Business Day Cadence)
+               │
+               ▼
+    Multi-Sheet Excel Export
 ```
 
 ---
 
-## 🎯 Deterministic Follow-Up Rules
+## Key Features
 
-| Stage | Trigger | Timing Rule | Status | Next Action |
-|---|---|---|---|---|
-| **Replied** | Prospect replies | N/A | `PAUSED_REPLIED` | Follow-ups paused; prioritize for sales conversation |
-| **Pending Initial** | Draft not yet approved | N/A | `PENDING_INITIAL` | Review and approve initial email draft |
-| **Follow-Up #1** | No response after initial email | +2 Business Days (skips weekends) | `DUE` / `UPCOMING` | Brief check-in referencing scope & timeline |
-| **Follow-Up #2** | No response after Follow-up #1 | +4 Business Days (skips weekends) | `DUE` / `UPCOMING` | Final check-in to close the loop |
-| **Sequence End** | No response after Follow-up #2 | N/A | `STOPPED_MAX` | Automated recommendations stop; mark Dormant |
+### 1. Lead Intelligence & Flexible Intake
+- **Structured Intake Form (Mode A):** Standard form capturing contact info, service type, budget, currency, timeline, and project description.
+- **Unformatted Email Extraction (Mode B):** Paste raw incoming prospect emails. Gemini parses sender details, company name, scope, budget figures (e.g., "$8k", "around 10,000 EUR"), natural-language timelines (e.g., "November 15", "Before holiday launch"), intent, and specific deliverables into an interactive review form before saving.
+- **Normalization Engine:** Deterministically normalizes services into five core agency categories (*Website Development*, *Branding & Design*, *Social Media*, *Digital Advertising*, *Other*) and maps currencies (*USD, EUR, GBP, CAD, AUD*).
 
----
+### 2. Qualification & Scoring Model
+The system uses a deterministic, rule-based 100-point scoring algorithm rather than relying on ungrounded AI scores.
 
-## 🛠️ Tech Stack
+| Factor | Max Points | Evaluation Logic |
+|---|---|---|
+| **Clear Service Requirement** | 25 | Explicit, recognized service category identified |
+| **Budget Provided** | 20 | Numeric budget figure specified |
+| **Realistic Budget** | 15 | Budget meets configured agency minimums for the service |
+| **Clear Timeline** | 15 | Specific timeframe or deadline stated |
+| **Strong Buying Intent** | 15 | Purchase-ready language, active RFP, or request for next steps |
+| **Business / Company Identified** | 5 | Verifiable company or brand name |
+| **Specific Requirements** | 5 | Concrete technical features or deliverables requested |
+| **Total Possible** | **100** | |
 
-- **Framework:** [Next.js 15/16 (App Router)](https://nextjs.org/) + React 19
-- **Language:** TypeScript 5 (strict typing)
-- **Styling:** Tailwind CSS + Lucide Icons
-- **Database:** [Supabase](https://supabase.com/) (PostgreSQL with Row Level Security)
-- **AI Engine:** Google Gemini (`@google/genai` SDK with Structured Outputs & Model Fallbacks)
-- **Email Handoff:** Human-approved `mailto:` email composer handoff + clipboard fallback
-- **CRM Export:** Multi-sheet `.xlsx` spreadsheet generation (`xlsx`) with custom column widths & AutoFilter
-- **Validation:** Zod 3
+#### Qualification Thresholds
+- **HIGH (80–100 points):** Strong buying intent, verified budget, clear scope, and defined timeline.
+- **MEDIUM (50–79 points):** Qualified opportunity requiring scope or budget clarification.
+- **LOW (0–49 points):** Exploratory inquiry, unstated budget, or undefined scope.
 
----
+> [!NOTE]
+> **Configurable Heuristics:** The "Realistic Budget" factor evaluates budgets against baseline agency ranges (e.g., Website Development: $2,500–$150,000; Branding: $1,500–$60,000). These thresholds reflect typical agency baselines and can be tailored per agency.
 
-## 📊 Multi-Sheet Excel CRM Export
+### 3. Operational Priority Matrix
+Leads are categorized into operational action buckets:
+- **🔴 A — Act Today:** High-qualification leads awaiting initial outreach approval OR active leads with follow-ups due today.
+- **🟢 Replied (Needs Review):** Prospects who replied to outreach; automated follow-up recommendations are paused for sales conversation.
+- **🟡 B — Review & Scope:** Medium-tier inquiries or leads with missing information requiring scope definition.
+- **⚪ C — Low / Dormant:** Low-score inquiries or leads where follow-up sequences have concluded.
 
-LeadFlow provides instant, zero-dependency spreadsheet exports of your CRM pipeline:
-- **`CRM Leads` Sheet:** Complete lead profiles including priority tiers, AI qualification, score, budget, response state, next follow-up dates, and source. Features frozen top rows and AutoFilters.
-- **`Follow-Ups` Sheet:** Dedicated log of all scheduled and completed follow-up interactions.
-- **`Summary` Sheet:** Real-time agency KPI dashboard showing pipeline volume, priority tier distribution, response breakdowns, and total pipeline value.
+### 4. Human-in-the-Loop Communication
+- **AI Initial Reply Drafts:** Generates personalized plain-text responses addressing the prospect's exact requirements without hallucinated promises or robotic phrasing.
+- **Inline Editing & Approval:** Agency staff can review, edit subject/body in real time, and explicitly mark drafts as `APPROVED`.
+- **Email Client Handoff:** Clicking **"Open Email Composer"** triggers a `mailto:` link pre-populating recipient, subject line, and the approved body in the user's default desktop or web email client. A **"Copy Email"** fallback is provided for manual pasting.
+- **Safety Boundary:** LeadFlow AI does **not** send emails autonomously. Email delivery occurs through the user's authorized email client.
+
+### 5. Follow-Up Intelligence
+Tracks conversation progress through manual response logging:
+- **`Waiting for Response`:** Outreach completed; waiting for prospect response.
+- **`Replied`:** Prospect responded; follow-ups are automatically paused (`PAUSED_REPLIED`).
+- **`No Response`:** Triggers deterministic business-day follow-up recommendations:
+  - **Follow-Up #1:** Recommended after **2 business days** (skipping weekends).
+  - **Follow-Up #2:** Recommended after **4 business days** (skipping weekends).
+  - **Sequence End:** After Follow-Up #2 with no response, recommendations stop (`STOPPED_MAX`) and the lead transitions to dormant.
+- **Follow-Up Drafts:** Generates concise, stage-appropriate follow-up email drafts for human approval before handoff.
+
+### 6. Multi-Sheet Excel CRM Export
+Generates zero-dependency `.xlsx` workbooks directly in-memory:
 - **Dual Export Scope:**
-  - **Export All Leads:** Downloads the complete agency CRM database (`LeadFlow_CRM_YYYY-MM-DD.xlsx`).
-  - **Export Current View:** Downloads the exact filtered and searched subset currently displayed in the Lead Inbox (`LeadFlow_CRM_View_YYYY-MM-DD.xlsx`).
+  - **Export All Leads:** Full database snapshot (`LeadFlow_CRM_YYYY-MM-DD.xlsx`).
+  - **Export Current View:** Filtered subset based on active inbox filters and search query (`LeadFlow_CRM_View_YYYY-MM-DD.xlsx`).
+- **Workbook Structure:**
+  1. **`CRM Leads` Sheet:** 20 data columns (contact details, qualification score, priority tier, response status, follow-up schedule, timestamps, AI summary, recommended action), styled column widths, frozen header row, and AutoFilters.
+  2. **`Follow-Ups` Sheet:** Complete chronological log of scheduled and completed follow-ups.
+  3. **`Summary` Sheet:** Pipeline KPI overview including total lead volume, pipeline value, priority breakdown, and response status counts.
 
 ---
 
-## 🗄️ Database Architecture
+## Tech Stack
+
+| Layer | Technology | Description |
+|---|---|---|
+| **Framework** | [Next.js 16 (App Router)](https://nextjs.org/) | Full-stack React 19 framework with server routes and SSR |
+| **Language** | [TypeScript 5](https://www.typescriptlang.org/) | Strict type checking across API, database, and UI |
+| **Styling** | [Tailwind CSS 4](https://tailwindcss.com/) + [Lucide Icons](https://lucide.dev/) | Modern utility-first interface design |
+| **Database** | [Supabase](https://supabase.com/) (PostgreSQL) | Cloud relational database with Row Level Security (RLS) |
+| **AI Integration** | [Google Gen AI SDK](https://github.com/google-gemini/gemini-js) (`@google/genai`) | Structured output extraction and contextual drafting |
+| **Spreadsheet Engine** | [XLSX (SheetJS)](https://sheetjs.com/) | Binary Excel workbook generation |
+| **Validation** | [Zod 4](https://zod.dev/) | Runtime request schema validation |
+
+---
+
+## Database Architecture
 
 ### `leads` Table
-Stores contact information, inquiry message, qualification results, and response state.
+Stores contact information, qualification results, heuristic scoring, and response tracking state.
 - `id` (UUID, Primary Key)
 - `name`, `email`, `company`, `message`, `source` (`'form'` | `'email'`), `service`, `budget`, `currency`, `timeline`
-- `ai_score` (0–100), `qualification` (`HIGH` | `MEDIUM` | `LOW`), `intent`, `urgency`, `ai_summary`, `ai_reasoning`, `missing_information`, `recommended_action`
+- `ai_score` (Integer, 0–100), `qualification` (`HIGH` | `MEDIUM` | `LOW`), `intent`, `urgency`, `ai_summary`, `ai_reasoning`, `missing_information`, `recommended_action`
 - `status` (`NEW` | `AI_ANALYZED` | `AI_ANALYSIS_FAILED` | `PENDING_APPROVAL` | `APPROVED` | `CONTACTED` | `CLOSED`)
 - `response_status` (`waiting` | `replied` | `no_response`)
 - `last_contacted_at`, `next_follow_up_at` (Timestamps)
@@ -121,12 +156,11 @@ Stores contact information, inquiry message, qualification results, and response
 - `created_at`, `updated_at`
 
 ### `communications` Table
-Stores AI-generated drafts, human editing history, and approval records.
+Stores AI-generated drafts, editing history, and approval records.
 - `id` (UUID, Primary Key)
 - `lead_id` (UUID, Foreign Key $\rightarrow$ `leads.id` ON DELETE CASCADE)
 - `type` (`'initial_reply'` | `'follow_up_1'` | `'follow_up_2'`)
-- `subject` (Text)
-- `body` (Text)
+- `subject`, `body` (Text)
 - `status` (`DRAFT` | `APPROVED` | `REJECTED` | `SENT`)
 - `created_at`, `updated_at`, `approved_at`, `sent_at` (Timestamps)
 
@@ -142,45 +176,106 @@ Tracks scheduled and completed follow-up events.
 
 ---
 
-## 🔌 API Routes
+## API Reference
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/leads` | Ingests a new lead into Supabase (`status: NEW`). |
-| `GET` | `/api/leads` | Lists leads with search, filters (tier, status, response, source, service), and sorting. |
-| `GET` | `/api/leads/[id]` | Retrieves single lead with full communications history and follow-up recommendation. |
-| `PATCH` | `/api/leads/[id]/response` | Manually updates response status (`waiting`, `replied`, `no_response`) & recalculates follow-ups. |
-| `POST` | `/api/leads/extract-email` | Extracts structured lead fields from raw pasted email using Gemini. |
-| `POST` | `/api/leads/[id]/analyze` | Triggers Gemini AI qualification & deterministic scoring. |
-| `POST` | `/api/leads/[id]/draft` | Generates or regenerates an initial email reply draft. |
+| `POST` | `/api/leads` | Creates a new lead in Supabase (`status: NEW`). |
+| `GET` | `/api/leads` | Lists leads with search query, filters (tier, status, response, source, service), and sorting. |
+| `GET` | `/api/leads/[id]` | Retrieves a single lead with communications history and follow-up recommendation. |
+| `PATCH` | `/api/leads/[id]/response` | Updates response status (`waiting`, `replied`, `no_response`) & recalculates follow-up timing. |
+| `POST` | `/api/leads/extract-email` | Extracts structured lead fields from raw pasted email text using Gemini. |
+| `POST` | `/api/leads/[id]/analyze` | Runs Gemini analysis & executes deterministic scoring. |
+| `POST` | `/api/leads/[id]/draft` | Generates initial email reply draft. |
 | `GET` | `/api/leads/[id]/draft` | Fetches the initial communication draft for a lead. |
-| `POST` | `/api/leads/[id]/followup-draft` | Generates a concise follow-up email draft (`follow_up_1` or `follow_up_2`). |
+| `POST` | `/api/leads/[id]/followup-draft` | Generates follow-up draft (`follow_up_1` or `follow_up_2`). |
 | `GET` | `/api/leads/[id]/followup-draft` | Fetches follow-up communication drafts for a lead. |
-| `GET` | `/api/drafts` | Lists all communication drafts joined with lead metadata for Drafts view. |
-| `PATCH` | `/api/communications/[id]` | Saves manual human edits to a draft's subject and body. |
-| `POST` | `/api/communications/[id]/approve` | Approves email draft (`status: APPROVED`, records `approved_at`). |
-| `GET` | `/api/export/crm` | Generates and downloads multi-sheet `.xlsx` CRM spreadsheet (`scope=all` or `scope=view`). |
+| `GET` | `/api/drafts` | Lists communication drafts joined with lead metadata. |
+| `PATCH` | `/api/communications/[id]` | Saves edits to draft subject and body. |
+| `POST` | `/api/communications/[id]/approve` | Approves draft (`status: APPROVED`, sets `approved_at`). |
+| `GET` | `/api/export/crm` | Generates and downloads multi-sheet `.xlsx` workbook (`scope=all` or `scope=view`). |
 
 ---
 
-## 🚀 Getting Started
+## Security & Data Integrity
 
-### 1. Configure Environment
+- **Server-Side API Key Isolation:** `GEMINI_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are executed exclusively within server route handlers and are never exposed to browser bundles.
+- **Row Level Security (RLS):** Supabase tables enforce RLS policies. Direct browser operations use the public anonymous client, while privileged state transitions occur via protected server routes.
+- **Input Sanitization:** All inbound payloads are validated using Zod schemas before database insertion or AI processing.
+- **No Secret Leakage:** Environment secrets are managed via `.env.local` (gitignored), with template references provided in `.env.example`.
 
-Create `.env.local` based on `.env.example`:
+---
+
+## Testing & Verification
+
+The repository includes automated verification suites for critical business logic:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://your-supabase-project.supabase.co
+# 1. Verify deterministic follow-up scheduling & business-day calculation
+node scripts/test-followups.mjs
+
+# 2. Verify multi-sheet Excel generation, schema, and calculations
+node scripts/test-excel-export.mjs
+
+# 3. Static type checking
+npm run typecheck
+
+# 4. Code quality & linting
+npm run lint
+
+# 5. Production build compilation
+npm run build
+```
+
+---
+
+## Getting Started Locally
+
+### 1. Prerequisites
+- Node.js 18.18+ or 20+
+- Supabase project (PostgreSQL)
+- Google Gemini API key
+
+### 2. Environment Configuration
+Create a `.env.local` file modeled after `.env.example`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
 GEMINI_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-3.1-flash-lite
 ```
 
-### 2. Run Locally
+### 3. Database Setup
+Apply migrations located in `supabase/migrations/` in sequential order via the Supabase SQL Editor or CLI:
+1. `20261005000000_create_leads_table.sql`
+2. `20261005000001_create_communications_table.sql`
+3. `20261006000000_add_response_and_follow_ups.sql`
+
+### 4. Run Development Server
 
 ```bash
+npm install
 npm run dev
 ```
 
-Visit `http://localhost:3000`.
+Visit `http://localhost:3000` to interact with the application.
+
+---
+
+## Project Status
+
+LeadFlow AI is a completed portfolio project with persistent Supabase storage and a full lead qualification, operational prioritization, AI drafting, response tracking, follow-up scheduling, and Excel export workflow.
+
+All demo lead records represent **Northstar Studio** (a fictional agency) and contain fictional sample data.
+
+---
+
+## Roadmap
+
+Planned future enhancements:
+1. **Email Provider Integration:** Direct outbound delivery via transactional email providers (e.g., Resend, SendGrid) with DKIM/SPF domain verification.
+2. **Inbound Reply Detection:** Webhook listeners for automated response detection and automatic reply-thread parsing.
+3. **Automated CRM Sync:** Bi-directional synchronization with external CRM platforms (HubSpot, Salesforce).
+4. **Pipeline Analytics:** Advanced reporting dashboards for conversion velocity, win rates, and service demand analytics.
